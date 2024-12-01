@@ -1,10 +1,9 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
 from matplotlib.animation import FuncAnimation
-import os
-from functools import partial
 from matplotlib.patches import Circle
+import os
 
 result_dir = "results"
 os.makedirs(result_dir, exist_ok=True)
@@ -54,7 +53,6 @@ class MLP:
 
     def backward(self, X, y):
         """Computes gradients and updates weights."""
-        # Forward pass to get outputs
         Z1 = X @ self.W1 + self.b1
         A1, _ = self._activate(Z1)
         Z2 = A1 @ self.W2 + self.b2
@@ -65,7 +63,6 @@ class MLP:
         dW2 = A1.T @ dZ2  # Weight gradient for W2
         db2 = np.sum(dZ2, axis=0, keepdims=True)  # Bias gradient for b2
 
-        # Backpropagate through the hidden layer
         dA1 = dZ2 @ self.W2.T  # Gradient w.r.t A1
         dZ1 = dA1 * self.hidden_derivative  # Apply activation derivative
         dW1 = X.T @ dZ1  # Weight gradient for W1
@@ -95,13 +92,19 @@ class MLP:
 
 def generate_data(n_samples=100):
     np.random.seed(0)
-    # Generate input
     X = np.random.randn(n_samples, 2)
-    y = (X[:, 0] ** 2 + X[:, 1] ** 2 > 1).astype(int) * 2 - 1  # Circular boundary
-    y = y.reshape(-1, 1)
-    return X, y
+    y = (X[:, 0] ** 2 + X[:, 1] ** 2 > 1).astype(int) * 2 - 1
+    return X, y.reshape(-1, 1)
 
-# Visualization update function
+def plot_decision_boundary(ax, mlp, X):
+    x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
+    y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100),
+                         np.linspace(y_min, y_max, 100))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    preds = mlp.forward(grid).reshape(xx.shape)
+    ax.contourf(xx, yy, preds, levels=[-np.inf, 0, np.inf], colors=['blue', 'red'], alpha=0.2)
+
 def update(frame, mlp, ax_input, ax_hidden, ax_gradient, X, y):
     ax_hidden.clear()
     ax_input.clear()
@@ -112,51 +115,46 @@ def update(frame, mlp, ax_input, ax_hidden, ax_gradient, X, y):
         mlp.forward(X)
         mlp.backward(X, y)
 
-    # Plot hidden features
+    # Hidden Space Visualization
     hidden_features = mlp.hidden_output
     ax_hidden.scatter(hidden_features[:, 0], hidden_features[:, 1], c=y.ravel(), cmap='bwr', alpha=0.7)
-    ax_hidden.set_title("Hidden Space at Step {}".format(frame * 10))
+    ax_hidden.set_title(f"Hidden Space at Step {frame * 10}")
+    ax_hidden.set_xlim(-1.5, 1.5)
+    ax_hidden.set_ylim(-1.5, 1.5)
 
-    # Visualize input space
-    ax_input.scatter(X[:, 0], X[:, 1], c=y.ravel(), cmap='bwr', alpha=0.7)
-    ax_input.set_title("Input Space at Step {}".format(frame * 10))
+    # Input Space Visualization
+    plot_decision_boundary(ax_input, mlp, X)
+    ax_input.scatter(X[:, 0], X[:, 1], c=y.ravel(), cmap='bwr', edgecolors='k', alpha=0.7)
+    ax_input.set_title(f"Input Space at Step {frame * 10}")
 
-    # Visualize gradients
+    # Gradient Visualization
     for i in range(mlp.W1.shape[0]):
         for j in range(mlp.W1.shape[1]):
-            radius = mlp.input_gradients[i, j]
-            circle = Circle((i, j + mlp.W1.shape[0]), radius=radius, color='purple', alpha=0.5)
-            ax_gradient.add_patch(circle)
-
-    ax_gradient.set_title("Gradients at Step {}".format(frame * 10))
-
+            ax_gradient.plot([i, j], [0, 1], color='purple', lw=mlp.input_gradients[i, j] * 5, alpha=0.7)
+    ax_gradient.set_title(f"Gradients at Step {frame * 10}")
 
 def visualize(activation, lr, step_num):
     X, y = generate_data()
     mlp = MLP(input_dim=2, hidden_dim=3, output_dim=1, lr=lr, activation=activation)
 
-    # Set up visualization
     fig = plt.figure(figsize=(21, 7))
-    ax_hidden = fig.add_subplot(131, projection='3d')
+    ax_hidden = fig.add_subplot(131)
     ax_input = fig.add_subplot(132)
     ax_gradient = fig.add_subplot(133)
 
-    # Create animation
     ani = FuncAnimation(
         fig,
-        partial(update, mlp=mlp, ax_input=ax_input, ax_hidden=ax_hidden, ax_gradient=ax_gradient, X=X, y=y),
+        lambda frame: update(frame, mlp, ax_input, ax_hidden, ax_gradient, X, y),
         frames=step_num // 10,
-        init_func=lambda: None,  # Add an empty init function if needed
         repeat=False
     )
 
-    # Save the animation as a GIF
     ani.save(os.path.join(result_dir, "visualize.gif"), writer='pillow', fps=10)
     plt.close()
 
 
 if __name__ == "__main__":
-    activation = "tanh"
+    activation = "tanh" 
     lr = 0.1
     step_num = 1000
     visualize(activation, lr, step_num)
